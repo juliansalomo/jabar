@@ -1,0 +1,120 @@
+---
+title: "Database System"
+subtitle: "Final Exam"
+author: "Group 1"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document: 
+    html_document: null
+    code_folding: show
+    toc: yes
+    toc_float:
+      collapsed: yes
+    number_sections: yes
+    theme: sandstone
+    css: style.css
+    highlight: monochrome
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(message = F,
+                      warning = F)
+```
+
+
+```{r me, echo=FALSE,fig.align='center', out.width = '30%'}
+knitr::include_graphics("https://github.com/juliansalomo/UAS_DBS/blob/main/logo.png")
+```
+
+<img style="float: right; margin: 0px 100px 0px 0px; width:25%" src="D:/Julian Salomo/Matana/Database System/Week5/me.jpg"/> 
+
+Email &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;&nbsp;:  juliansalomo2@gmail.com <br>
+RPubs  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp; &nbsp; &nbsp;: https://rpubs.com/juliansalomo/ <br>
+Department &nbsp;: [Business Statistics](https://matanauniversity.ac.id/?ly=academic&c=sb) <br>
+Address  &nbsp; &nbsp; &nbsp; &nbsp; : ARA Center, Matana University Tower <br>
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; Jl. CBD Barat Kav, RT.1, Curug Sangereng, Kelapa Dua, Tangerang, Banten 15810.
+
+<br>
+
+***
+
+# {-} 
+Berikut merupakan library-library yang akan digunakan dalam pemodelan spasial
+
+```{r}
+library(rgdal)            # untuk membuka file format .sdh (peta)
+library(raster)
+library(openxlsx)         # untuk membuka file excel
+library(spdep)
+library(sp)
+library(raster)
+library(rgeos)
+library(rspatial)
+library(latticeExtra)
+library(RColorBrewer)
+library(spatialreg)
+library(DT)
+```
+
+# Input Data
+
+Disini saya akan memberikan contoh menggunakan data kemiskinan di Jawa Barat yang dapat di download di link [ini](https://github.com/juliansalomo/jabar)
+Pertama kita membaca file data lengkap beserta peta Jawa Barat dengan fungsi berikut
+
+```{r}
+data.jabar = read.xlsx("Jabar Data (gabung).xlsx")
+jabar2 <- readOGR(dsn = "petaJabar2" , layer = "Jabar2")
+datatable(data.jabar, htmltools::em('Table data'),     
+          extension = 'FixedColumns',
+          options = list(scrollX = TRUE, fixedColums = TRUE)) 
+```
+
+# Plot peta data
+
+Sekarang kita akan memvisualisasikan kemiskinan di tahun 2016 di provinsi Jawa Barat. Kemiskinan dari dataset `data.jabar` berada di kolom *p.miskin16*. Kita akan menambahkan kolom ini ke dalam dataset `jabar2` dengan script berikut
+
+```{r}
+jabar2$miskin2<- data.jabar$p.miskin16
+```
+
+Selanjutnya  kita akan memvisualisasikannya dengan package `sp` dengan fungsi berikut
+
+```{r}
+kota <- aggregate(jabar2, "KABKOT")
+grps <- 10           #mengelompokkan menjadi 10 interval
+brks <- quantile(jabar2$miskin2, 0:(grps-1)/(grps-1), na.rm=TRUE)
+p <- spplot(jabar2, "miskin2", at=brks, col.regions=rev(brewer.pal(grps, "RdBu")), col="transparent" )
+p + layer(sp.polygons(kota))
+```
+
+Dengan plot di atas kita bisa melihat wilayah-wilayah yang terkonsentrasi dengan kemiskinan. Dan kita bisa lihat bahwa di bagian yang merah pekat, area sekitarnya pun memiliki tingkat kemiskinan yang cukup tinggi.
+
+# Pemodelan Regresi Spasial
+
+Di bagian sini kita akan membangun model linier untuk data kita. Model spasial secara global terdiri dari:
+
+* SEM: $y=XB+u$
+* SAR: $y=\rho Wy+XB+\varepsilon$
+* SARMA: $y=\rho Wy+XB+u$
+
+## Model SEM
+
+```{r}
+w<-poly2nb(jabar2)
+sem<-errorsarlm(p.miskin16~EYS2016,data=data.jabar,nb2listw(w))
+summary(sem)
+```
+
+## Model SAR
+
+```{r}
+sar<-lagsarlm(p.miskin16~EYS2016,data=data.jabar,nb2listw(w))
+summary(sar)
+```
+
+## Model SARMA
+
+```{r}
+gsm<-sacsarlm(p.miskin16~EYS2016,data=data.jabar,nb2listw(w))
+summary(gsm)
+```
